@@ -15,6 +15,7 @@ import secrets
 from pathlib import Path
 from urllib.parse import urlparse
 
+import netsetup
 from flask import (
     Flask, render_template, request, redirect, session,
     send_from_directory, abort, jsonify, url_for
@@ -38,8 +39,7 @@ AVATAR_TTL = 24 * 60 * 60              # обновлять аватарку р�
 MAX_DOWNLOAD_SIZE = 20 * 1024 * 1024   # лимит Bot API на скачивание файлов
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024     # лимит Bot API на отправку файлов
 
-WEB_HOST = "127.0.0.1"
-WEB_PORT = 5000
+# Хост, порт, HTTPS и открытие порта настраиваются в server_config.json (см. netsetup.py)
 
 # Эти форматы безопасно открывать прямо в браузере,
 # всё остальное (html, svg, exe...) отдаётся только как скачивание
@@ -111,10 +111,36 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 app = Flask(__name__, template_folder=str(BASE_DIR / "templates"), static_folder=str(BASE_DIR / "static"), static_url_path="/static")
-app.secret_key = os.environ.get("MIZU_SECRET_KEY") or "mizu-local-secret-change-me"
+def load_secret_key():
+    """Ключ подписи сессий: из MIZU_SECRET_KEY или из файла secret.key (создаётся сам)."""
+    env = os.environ.get("MIZU_SECRET_KEY")
+    if env:
+        return env
+    path = BASE_DIR / "secret.key"
+    try:
+        if path.exists():
+            value = path.read_text(encoding="utf-8").strip()
+            if value:
+                return value
+        value = secrets.token_hex(32)
+        path.write_text(value, encoding="utf-8")
+        return value
+    except OSError:
+        return secrets.token_hex(32)
+
+
+app.secret_key = load_secret_key()
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_SIZE
+
+
+@app.after_request
+def add_security_headers(response):
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    response.headers.setdefault("Referrer-Policy", "same-origin")
+    return response
 
 telegram_loop = None
 
@@ -763,18 +789,60 @@ def setup_needed():
     db=get_db(); n=db.execute("SELECT COUNT(*) FROM operators").fetchone()[0]; db.close(); return n == 0
 
 
+LOGIN_MAX_FAILS = 5          # неудачных попыток
+LOGIN_WINDOW = 5 * 60        # за сколько секунд
+_login_fails = {}
+_login_lock = threading.Lock()
+
+
+def safe_next(value):
+    """Пускаем только на страницы этого же сайта (защита от редиректа на чужой адрес)."""
+    if value and value.startswith("/") and not value.startswith("//") and "\\" not in value:
+        return value
+    return "/"
+
+
+def login_wait_seconds():
+    """Сколько секунд ещё ждать этому IP (0 — можно пробовать)."""
+    ip = request.remote_addr or "?"
+    now = time.time()
+    with _login_lock:
+        fails = [x for x in _login_fails.get(ip, []) if now - x < LOGIN_WINDOW]
+        _login_fails[ip] = fails
+        if len(fails) >= LOGIN_MAX_FAILS:
+            return int(LOGIN_WINDOW - (now - fails[0])) + 1
+    return 0
+
+
+def login_failed():
+    ip = request.remote_addr or "?"
+    with _login_lock:
+        _login_fails.setdefault(ip, []).append(time.time())
+
+
+def login_reset():
+    with _login_lock:
+        _login_fails.pop(request.remote_addr or "?", None)
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    if current_operator(): return redirect(request.args.get("next") or "/")
+    next_url = safe_next(request.form.get("next") or request.args.get("next"))
+    if current_operator(): return redirect(next_url)
     if setup_needed(): return redirect(url_for("setup"))
     error = None
-    next_url = request.form.get("next") or request.args.get("next") or "/"
     if request.method == "POST":
+        wait = login_wait_seconds()
+        if wait:
+            error = f"Слишком много неудачных попыток. Подождите {wait // 60 + 1} мин."
+            return render_template("login.html", error=error, next_url=next_url), 429
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         db=get_db(); op=db.execute("SELECT * FROM operators WHERE username=?", (username,)).fetchone(); db.close()
         if op and check_password_hash(op["password_hash"], password):
-            session.clear(); session["operator_id"] = op["id"]; return redirect(next_url if next_url.startswith("/") else "/")
+            login_reset()
+            session.clear(); session["operator_id"] = op["id"]; return redirect(next_url)
+        login_failed()
         error="Неверный логин или пароль"
     return render_template("login.html", error=error, next_url=next_url)
 
@@ -782,6 +850,9 @@ def login():
 @app.route("/setup", methods=["GET", "POST"])
 def setup():
     if not setup_needed(): return redirect(url_for("login"))
+    if request.remote_addr not in ("127.0.0.1", "::1"):
+        return ("Первый запуск: администратора нужно создать на самом компьютере, где запущен бот. "
+                f"Откройте на нём {request.scheme}://127.0.0.1:{request.host.rsplit(':', 1)[-1]}/setup"), 403
     error=None
     if request.method == "POST":
         username=request.form.get("username", "").strip(); display=request.form.get("display_name", "").strip() or username; password=request.form.get("password", ""); confirm=request.form.get("confirm", "")
@@ -1117,10 +1188,17 @@ async def telegram_main():
 
 
 def web_main():
-    print(f"Веб-панель: http://{WEB_HOST}:{WEB_PORT}")
+    try:
+        net = netsetup.prepare(BASE_DIR)
+    except Exception as e:
+        print(f"[NET] Ошибка настройки сети: {e}. Запускаю только локально.")
+        net = netsetup.NetSettings()
+
+    app.config["SESSION_COOKIE_SECURE"] = net.https
     app.run(
-        host=WEB_HOST,
-        port=WEB_PORT,
+        host=net.host,
+        port=net.port,
+        ssl_context=net.ssl_context,
         debug=False,
         use_reloader=False
     )

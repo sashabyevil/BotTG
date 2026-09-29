@@ -4,3 +4,7 @@ proxy.txt
 media/
 avatars/
 stickers/
+secret.key
+cert.pem
+key.pem
+server_config.json
