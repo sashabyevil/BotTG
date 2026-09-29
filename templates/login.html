@@ -1,0 +1,20 @@
+{% extends "auth.html" %}
+{% block title %}Вход{% endblock %}
+{% block content %}
+<h1>Mizu Support</h1>
+<p class="sub">Войдите, чтобы открыть панель.</p>
+
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+<form method="post">
+    <input type="hidden" name="next" value="{{ next_url }}">
+
+    <label for="username">Логин</label>
+    <input id="username" name="username" type="text" autocomplete="username" autofocus required>
+
+    <label for="password">Пароль</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+    <button type="submit">Войти</button>
+</form>
+{% endblock %}

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Mizu Support{% endblock %}</title>
+<style>
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: #0f172a;
+    color: #e5e7eb;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+.topbar {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    background: #1e293b;
+    border-bottom: 1px solid #334155;
+    padding: 10px 20px;
+}
+.brand { font-size: 19px; font-weight: 700; color: #fff; text-decoration: none; }
+.topbar nav { display: flex; gap: 4px; flex-wrap: wrap; margin-right: auto; }
+.topbar nav a {
+    color: #cbd5e1;
+    text-decoration: none;
+    font-size: 14px;
+    padding: 7px 12px;
+    border-radius: 10px;
+}
+.topbar nav a:hover { background: #334155; color: #fff; }
+.topbar nav a.active { background: #0f172a; color: #fff; }
+.who { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #94a3b8; }
+.who form { margin: 0; }
+
+.badge {
+    display: inline-block;
+    min-width: 20px;
+    padding: 1px 6px;
+    margin-left: 4px;
+    border-radius: 10px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+}
+.badge[hidden] { display: none; }
+
+.page { max-width: 900px; margin: 0 auto; padding: 24px 20px 60px; }
+h1 { font-size: 22px; margin: 0 0 18px; }
+h2 {
+    margin: 26px 0 12px;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #94a3b8;
+}
+
+.card {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 14px;
+    padding: 18px;
+    margin-bottom: 14px;
+}
+
+label.field { display: block; font-size: 13px; color: #94a3b8; margin: 12px 0 6px; }
+input[type="text"], input[type="password"], input[type="search"], select, textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid #334155;
+    background: #0f172a;
+    color: #fff;
+    font-size: 15px;
+    font-family: inherit;
+    outline: none;
+}
+input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
+textarea { min-height: 90px; resize: vertical; }
+
+button, .btn {
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    border-radius: 10px;
+    padding: 9px 16px;
+    background: #334155;
+    text-decoration: none;
+    display: inline-block;
+}
+button:hover, .btn:hover { background: #475569; }
+button.primary { background: #2563eb; }
+button.primary:hover { background: #1d4ed8; }
+button.danger:hover { background: #b91c1c; }
+button:disabled { opacity: 0.5; cursor: default; }
+
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.muted { color: #94a3b8; font-size: 14px; }
+.check { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-size: 15px; cursor: pointer; }
+.check input { width: 18px; height: 18px; }
+</style>
+{% block head %}{% endblock %}
+</head>
+<body>
+
+<header class="topbar">
+    <a class="brand" href="/">Mizu Support</a>
+    <nav>
+        <a href="/" class="{{ 'active' if request.path == '/' else '' }}">💬 Диалоги<span class="badge" data-unread-badge hidden></span></a>
+        <a href="/stickers">😊 Стикеры</a>
+        <a href="/stats" class="{{ 'active' if request.path == '/stats' else '' }}">📊 Статистика</a>
+        {% if operator and operator['role'] == 'admin' %}
+        <a href="/operators" class="{{ 'active' if request.path == '/operators' else '' }}">👥 Операторы</a>
+        {% endif %}
+        <a href="/settings" class="{{ 'active' if request.path == '/settings' else '' }}">⚙ Настройки</a>
+    </nav>
+    <div class="who">
+        <span>{{ operator_name }}</span>
+        <form method="post" action="/logout"><button type="submit">Выйти</button></form>
+    </div>
+</header>
+
+<main class="page">
+{% block content %}{% endblock %}
+</main>
+
+<script src="/static/panel.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

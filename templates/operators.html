@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Операторы — Mizu Support{% endblock %}
+
+{% block head %}
+<style>
+.op { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.op .who { flex: 1; min-width: 160px; color: #e5e7eb; }
+.op .who b { display: block; }
+.op .who small { color: #94a3b8; }
+.op select { width: auto; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 600px) { .grid2 { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>👥 Операторы</h1>
+
+<div id="list"></div>
+
+<h2>Добавить оператора</h2>
+<div class="card">
+    <div class="grid2">
+        <div>
+            <label class="field" for="newUsername">Логин (латиница, цифры, _ . -)</label>
+            <input type="text" id="newUsername" maxlength="32" autocomplete="off">
+        </div>
+        <div>
+            <label class="field" for="newName">Имя в переписке</label>
+            <input type="text" id="newName" maxlength="40" autocomplete="off">
+        </div>
+        <div>
+            <label class="field" for="newPassword">Пароль (не короче 8 символов)</label>
+            <input type="password" id="newPassword" autocomplete="new-password">
+        </div>
+        <div>
+            <label class="field" for="newRole">Роль</label>
+            <select id="newRole">
+                <option value="operator">Оператор</option>
+                <option value="admin">Администратор</option>
+            </select>
+        </div>
+    </div>
+    <div class="row" style="margin-top: 14px">
+        <button type="button" class="primary" id="addBtn">Добавить</button>
+    </div>
+    <p class="muted">
+        Оператор отвечает пользователям, ищет, сохраняет стикеры и удаляет свои сообщения.
+        Администратор дополнительно управляет операторами, настройками бота и может очищать и удалять диалоги.
+    </p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const listBox = document.getElementById("list");
+
+async function load() {
+    const response = await fetch("/api/operators");
+    const data = await response.json();
+
+    listBox.innerHTML = "";
+
+    data.operators.forEach(op => {
+        const card = document.createElement("div");
+        card.className = "card op";
+
+        const who = document.createElement("div");
+        who.className = "who";
+        const name = document.createElement("b");
+        name.textContent = op.display_name || op.username;
+        const login = document.createElement("small");
+        login.textContent = "@" + op.username + (op.id === data.me ? " · это вы" : "");
+        who.append(name, login);
+
+        const role = document.createElement("select");
+        [["operator", "Оператор"], ["admin", "Администратор"]].forEach(([value, label]) => {
+            const option = document.createElement("option");
+            option.value = value;
+            option.textContent = label;
+            role.appendChild(option);
+        });
+        role.value = op.role;
+        role.onchange = async () => {
+            const result = await Panel.api(`/api/operators/${op.id}/update`, {role: role.value});
+            if (!result.ok) Panel.toast(result.error || "Ошибка", true);
+            load();
+        };
+
+        const rename = document.createElement("button");
+        rename.textContent = "✏️ Имя";
+        rename.onclick = async () => {
+            const value = prompt("Имя в переписке:", op.display_name || "");
+            if (value === null) return;
+            const result = await Panel.api(`/api/operators/${op.id}/update`, {display_name: value});
+            if (!result.ok) Panel.toast(result.error || "Ошибка", true);
+            load();
+        };
+
+        const reset = document.createElement("button");
+        reset.textContent = "🔑 Пароль";
+        reset.onclick = async () => {
+            const value = prompt("Новый пароль (не короче 8 символов):");
+            if (!value) return;
+            const result = await Panel.api(`/api/operators/${op.id}/update`, {password: value});
+            Panel.toast(result.ok ? "Пароль изменён" : (result.error || "Ошибка"), !result.ok);
+        };
+
+        card.append(who, role, rename, reset);
+
+        if (op.id !== data.me) {
+            const del = document.createElement("button");
+            del.className = "danger";
+            del.textContent = "🗑";
+            del.title = "Удалить";
+            del.onclick = async () => {
+                if (!confirm("Удалить оператора @" + op.username + "? Его сообщения в диалогах останутся.")) return;
+                const result = await Panel.api(`/api/operators/${op.id}/delete`);
+                if (!result.ok) Panel.toast(result.error || "Ошибка", true);
+                load();
+            };
+            card.appendChild(del);
+        }
+
+        listBox.appendChild(card);
+    });
+}
+
+document.getElementById("addBtn").onclick = async () => {
+    const result = await Panel.api("/api/operators", {
+        username: document.getElementById("newUsername").value,
+        display_name: document.getElementById("newName").value,
+        password: document.getElementById("newPassword").value,
+        role: document.getElementById("newRole").value,
+    });
+
+    if (result.ok) {
+        ["newUsername", "newName", "newPassword"].forEach(id => { document.getElementById(id).value = ""; });
+        Panel.toast("Оператор добавлен");
+        load();
+    } else {
+        Panel.toast(result.error || "Ошибка", true);
+    }
+};
+
+load();
+Panel.start();
+</script>
+{% endblock %}

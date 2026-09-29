@@ -1,0 +1,56 @@
+{% for message in messages %}
+{% set mt = message['media_type'] %}
+{% set mf = message['media_file'] %}
+{% set can_delete = operator['role'] == 'admin' or (message['sender'] == 'admin' and message['operator_id'] == operator['id']) %}
+<div class="message {{ 'user' if message['sender'] == 'user' else 'admin' }}{{ ' has-media' if mt else '' }}" id="m{{ message['id'] }}" data-id="{{ message['id'] }}">
+
+    <div class="tools">
+        {% if mt in ('photo', 'animation', 'sticker') and mf %}<button type="button" class="tool save-btn" data-file="{{ mf }}" title="Сохранить в стикеры">💾</button>{% endif %}
+        {% if can_delete %}<button type="button" class="tool del-btn" data-id="{{ message['id'] }}" title="Удалить сообщение из панели">🗑</button>{% endif %}
+    </div>
+
+    {% if message['sender'] == 'admin' and message['operator_name'] and message['operator_id'] != operator['id'] %}
+        <div class="author">{{ message['operator_name'] }}</div>
+    {% endif %}
+
+    {% if mt and not mf and mt != 'sticker_tgs' %}
+        <div class="missing">⚠️ Файл не загружен (лимит Telegram для ботов — 20 МБ)</div>
+
+    {% elif mt == 'photo' %}
+        <a href="/media/{{ mf }}" target="_blank"><img class="media" loading="lazy" src="/media/{{ mf }}" alt=""></a>
+
+    {% elif mt == 'animation' %}
+        {% if mf.endswith('.gif') %}
+            <img class="media" loading="lazy" src="/media/{{ mf }}" alt="">
+        {% else %}
+            <video class="media" src="/media/{{ mf }}" autoplay loop muted playsinline controls></video>
+        {% endif %}
+
+    {% elif mt == 'video' %}
+        <video class="media" src="/media/{{ mf }}" controls preload="metadata" playsinline></video>
+
+    {% elif mt == 'video_note' %}
+        <video class="media round" src="/media/{{ mf }}" controls preload="metadata" playsinline></video>
+
+    {% elif mt == 'voice' or mt == 'audio' %}
+        {% if mt == 'audio' and message['media_name'] %}<div class="text">🎵 {{ message['media_name'] }}</div>{% endif %}
+        <audio class="media" src="/media/{{ mf }}" controls preload="metadata"></audio>
+
+    {% elif mt == 'sticker' %}
+        {% if mf.endswith('.webm') %}
+            <video class="media sticker" src="/media/{{ mf }}" autoplay loop muted playsinline></video>
+        {% else %}
+            <img class="media sticker" loading="lazy" src="/media/{{ mf }}" alt="">
+        {% endif %}
+
+    {% elif mt == 'sticker_tgs' %}
+        <div class="emoji-sticker">{{ message['media_name'] or '💟' }}<small>анимированный стикер</small></div>
+
+    {% elif mt == 'document' %}
+        <a class="file" href="/media/{{ mf }}" download="{{ message['media_name'] or mf }}">📎 {{ message['media_name'] or 'Файл' }}</a>
+    {% endif %}
+
+    {% if message['text'] %}<div class="text">{{ message['text'] }}</div>{% endif %}
+    <div class="time" data-utc="{{ message['created_at'] }}"></div>
+</div>
+{% endfor %}

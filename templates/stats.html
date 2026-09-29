@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}Статистика — Mizu Support{% endblock %}
+
+{% block head %}
+<style>
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.stat { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 16px; }
+.stat .num { font-size: 28px; font-weight: 700; }
+.stat .label { color: #94a3b8; font-size: 13px; margin-top: 4px; }
+.stat .extra { color: #64748b; font-size: 12px; margin-top: 6px; }
+.stat.warn .num { color: #f59e0b; }
+
+.chart { display: flex; align-items: flex-end; gap: 6px; height: 180px; padding-top: 10px; }
+.col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; min-width: 0; }
+.bars { flex: 1; display: flex; align-items: flex-end; gap: 2px; width: 100%; justify-content: center; }
+.bar { width: 40%; max-width: 16px; border-radius: 4px 4px 0 0; min-height: 2px; }
+.bar.in { background: #3b82f6; }
+.bar.out { background: #22c55e; }
+.col .day { font-size: 10px; color: #64748b; margin-top: 6px; white-space: nowrap; }
+.legend { display: flex; gap: 16px; font-size: 13px; color: #94a3b8; margin-top: 12px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 9px 6px; border-bottom: 1px solid #334155; }
+th { color: #94a3b8; font-weight: 500; font-size: 13px; }
+td.n, th.n { text-align: right; }
+tr:last-child td { border-bottom: none; }
+a { color: #93c5fd; text-decoration: none; }
+a:hover { text-decoration: underline; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>📊 Статистика</h1>
+
+<div class="cards" id="cards"></div>
+
+<h2>Сообщения за 14 дней</h2>
+<div class="card">
+    <div class="chart" id="chart"></div>
+    <div class="legend">
+        <span><i style="background:#3b82f6"></i>От пользователей</span>
+        <span><i style="background:#22c55e"></i>От операторов</span>
+    </div>
+</div>
+
+<h2>Операторы</h2>
+<div class="card"><table id="opTable"></table></div>
+
+<h2>Самые активные пользователи</h2>
+<div class="card"><table id="topTable"></table></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function duration(seconds) {
+    if (seconds === null || seconds === undefined) return "—";
+    if (seconds < 60) return Math.round(seconds) + " с";
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) return minutes + " мин";
+    const hours = Math.floor(minutes / 60);
+    return hours + " ч " + (minutes % 60) + " мин";
+}
+
+function card(num, label, extra, warn) {
+    const box = document.createElement("div");
+    box.className = "stat" + (warn ? " warn" : "");
+
+    const n = document.createElement("div");
+    n.className = "num";
+    n.textContent = num;
+
+    const l = document.createElement("div");
+    l.className = "label";
+    l.textContent = label;
+
+    box.append(n, l);
+
+    if (extra) {
+        const e = document.createElement("div");
+        e.className = "extra";
+        e.textContent = extra;
+        box.appendChild(e);
+    }
+    return box;
+}
+
+function fillTable(table, head, rows) {
+    table.innerHTML = "";
+
+    const thead = document.createElement("tr");
+    head.forEach((title, i) => {
+        const th = document.createElement("th");
+        th.textContent = title;
+        if (i > 0) th.className = "n";
+        thead.appendChild(th);
+    });
+    table.appendChild(thead);
+
+    if (!rows.length) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = head.length;
+        td.className = "muted";
+        td.textContent = "Пока нет данных";
+        tr.appendChild(td);
+        table.appendChild(tr);
+        return;
+    }
+
+    rows.forEach(cells => {
+        const tr = document.createElement("tr");
+        cells.forEach((value, i) => {
+            const td = document.createElement("td");
+            if (i > 0) td.className = "n";
+            if (value instanceof Node) td.appendChild(value);
+            else td.textContent = value;
+            tr.appendChild(td);
+        });
+        table.appendChild(tr);
+    });
+}
+
+async function load() {
+    const offset = -new Date().getTimezoneOffset();
+    const response = await fetch("/api/stats?offset=" + offset);
+    const s = await response.json();
+
+    const cards = document.getElementById("cards");
+    cards.innerHTML = "";
+    cards.append(
+        card(s.users_total, "Всего диалогов", "новых сегодня: " + s.users_today + " · за 7 дней: " + s.users_week),
+        card(s.in_today, "Сообщений сегодня", "за 7 дней: " + s.in_week + " · всего: " + s.in_total),
+        card(s.out_total, "Ответов операторов", "за всё время"),
+        card(s.unanswered, "Ждут ответа", "последнее слово за пользователем", s.unanswered > 0),
+        card(duration(s.avg_response), "Среднее время ответа", "по " + s.responses_count + " ответам"),
+        card(duration(s.median_response), "Медианное время ответа", "половина ответов быстрее")
+    );
+
+    const chart = document.getElementById("chart");
+    chart.innerHTML = "";
+    const max = Math.max(1, ...s.daily.map(d => Math.max(d.in, d.out)));
+
+    s.daily.forEach(d => {
+        const col = document.createElement("div");
+        col.className = "col";
+
+        const bars = document.createElement("div");
+        bars.className = "bars";
+
+        [["in", d.in], ["out", d.out]].forEach(([kind, value]) => {
+            const bar = document.createElement("div");
+            bar.className = "bar " + kind;
+            bar.style.height = (value / max * 100) + "%";
+            bar.title = (kind === "in" ? "От пользователей: " : "От операторов: ") + value;
+            bars.appendChild(bar);
+        });
+
+        const day = document.createElement("div");
+        day.className = "day";
+        day.textContent = d.day.slice(8, 10) + "." + d.day.slice(5, 7);
+
+        col.append(bars, day);
+        chart.appendChild(col);
+    });
+
+    fillTable(
+        document.getElementById("opTable"),
+        ["Оператор", "За 7 дней", "Всего"],
+        s.operators.map(o => [o.name, o.week, o.total])
+    );
+
+    fillTable(
+        document.getElementById("topTable"),
+        ["Пользователь", "Сообщений"],
+        s.top_users.map(u => {
+            const link = document.createElement("a");
+            link.href = "/chat/" + u.id;
+            link.textContent = u.name;
+            return [link, u.total];
+        })
+    );
+}
+
+load();
+Panel.start();
+</script>
+{% endblock %}

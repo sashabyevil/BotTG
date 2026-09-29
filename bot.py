@@ -5,12 +5,19 @@ import sqlite3
 import threading
 import time
 import uuid
+import os
+from functools import wraps
+from datetime import datetime, timedelta
+
+import hashlib
+import hmac
+import secrets
 from pathlib import Path
 from urllib.parse import urlparse
 
 from flask import (
-    Flask, render_template, request, redirect,
-    send_from_directory, abort, jsonify
+    Flask, render_template, request, redirect, session,
+    send_from_directory, abort, jsonify, url_for
 )
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
@@ -103,7 +110,10 @@ if not BOT_TOKEN:
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-app = Flask(__name__, template_folder=str(BASE_DIR / "templates"))
+app = Flask(__name__, template_folder=str(BASE_DIR / "templates"), static_folder=str(BASE_DIR / "static"), static_url_path="/static")
+app.secret_key = os.environ.get("MIZU_SECRET_KEY") or "mizu-local-secret-change-me"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_SIZE
 
 telegram_loop = None
@@ -149,9 +159,28 @@ def init_database():
         row["name"]
         for row in db.execute("PRAGMA table_info(messages)")
     }
-    for column in ("media_type", "media_file", "media_name"):
+    for column in ("media_type", "media_file", "media_name", "operator_id"):
         if column not in columns:
-            db.execute(f"ALTER TABLE messages ADD COLUMN {column} TEXT")
+            db.execute(f"ALTER TABLE messages ADD COLUMN {column} INTEGER")
+
+    db.execute("""CREATE TABLE IF NOT EXISTS operators (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        display_name TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'operator',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )""")
+    db.execute("""CREATE TABLE IF NOT EXISTS bot_settings (
+        key TEXT PRIMARY KEY, value TEXT NOT NULL
+    )""")
+    defaults = {
+        "welcome_text": "Привет! 👋\n\nНапиши сюда сообщение, и оператор ответит тебе.",
+        "auto_reply_enabled": "0",
+        "auto_reply_text": "Сообщение получено ✅\nОжидай ответа оператора.",
+    }
+    for key, value in defaults.items():
+        db.execute("INSERT OR IGNORE INTO bot_settings(key,value) VALUES (?,?)", (key, value))
 
     db.commit()
     db.close()
@@ -391,7 +420,10 @@ def deliver_text(user_id, text):
     )
     future.result(timeout=15)
 
+    op = current_operator()
     save_message(user_id, "admin", text)
+    if op:
+        db = get_db(); db.execute("UPDATE messages SET operator_id=? WHERE id=(SELECT MAX(id) FROM messages WHERE user_id=? AND sender='admin')", (op["id"], user_id)); db.commit(); db.close()
     print(f"[ADMIN -> {user_id}] {text}")
 
 
@@ -423,6 +455,9 @@ def deliver_file(user_id, src, display_name, caption, mode):
         kind, final_name,
         display_name if kind in ("document", "audio") else None
     )
+    op = current_operator()
+    if op:
+        db = get_db(); db.execute("UPDATE messages SET operator_id=? WHERE id=(SELECT MAX(id) FROM messages WHERE user_id=? AND sender='admin')", (op["id"], user_id)); db.commit(); db.close()
     print(f"[ADMIN -> {user_id}] {kind}: {display_name}")
 
 
@@ -487,17 +522,75 @@ def list_packs():
     return packs
 
 
+
+# =========================
+# АВТОРИЗАЦИЯ ПАНЕЛИ
+# =========================
+
+def generate_password_hash(password):
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("ascii"), 200_000).hex()
+    return f"pbkdf2_sha256$200000${salt}${digest}"
+
+
+def check_password_hash(stored, password):
+    try:
+        algo, iterations, salt, digest = stored.split("$", 3)
+        if algo != "pbkdf2_sha256": return False
+        actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("ascii"), int(iterations)).hex()
+        return hmac.compare_digest(actual, digest)
+    except Exception:
+        return False
+
+
+def current_operator():
+    operator_id = session.get("operator_id")
+    if not operator_id:
+        return None
+    db = get_db()
+    row = db.execute("SELECT * FROM operators WHERE id = ?", (operator_id,)).fetchone()
+    db.close()
+    return row
+
+
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if current_operator() is None:
+            if request.path.startswith("/api/"):
+                return jsonify(ok=False, error="Требуется вход"), 401
+            return redirect(url_for("login", next=request.path))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def admin_required(view):
+    @wraps(view)
+    @login_required
+    def wrapped(*args, **kwargs):
+        op = current_operator()
+        if op["role"] != "admin":
+            if request.path.startswith("/api/"):
+                return jsonify(ok=False, error="Недостаточно прав"), 403
+            return "Недостаточно прав", 403
+        return view(*args, **kwargs)
+    return wrapped
+
+
 @app.route("/stickers")
+@login_required
 def stickers_page():
     return render_template("stickers.html")
 
 
 @app.route("/api/stickers")
+@login_required
 def api_stickers():
     return jsonify(packs=list_packs())
 
 
 @app.route("/sticker-file/<pack>/<filename>")
+@login_required
 def sticker_file(pack, filename):
     try:
         folder = pack_dir(pack)
@@ -513,6 +606,7 @@ def sticker_file(pack, filename):
 
 
 @app.route("/api/packs", methods=["POST"])
+@login_required
 def api_pack_create():
     data = request.get_json(silent=True) or {}
     try:
@@ -523,6 +617,7 @@ def api_pack_create():
 
 
 @app.route("/api/packs/rename", methods=["POST"])
+@login_required
 def api_pack_rename():
     data = request.get_json(silent=True) or {}
     try:
@@ -540,6 +635,7 @@ def api_pack_rename():
 
 
 @app.route("/api/packs/delete", methods=["POST"])
+@login_required
 def api_pack_delete():
     data = request.get_json(silent=True) or {}
     try:
@@ -550,6 +646,7 @@ def api_pack_delete():
 
 
 @app.route("/api/stickers/upload", methods=["POST"])
+@login_required
 def api_stickers_upload():
     try:
         folder = pack_dir(request.form.get("pack"), create=True)
@@ -575,6 +672,7 @@ def api_stickers_upload():
 
 
 @app.route("/api/stickers/save", methods=["POST"])
+@login_required
 def api_stickers_save():
     """Сохранить медиа из чата в стикерпак."""
     data = request.get_json(silent=True) or {}
@@ -593,6 +691,7 @@ def api_stickers_save():
 
 
 @app.route("/api/stickers/delete", methods=["POST"])
+@login_required
 def api_stickers_delete():
     data = request.get_json(silent=True) or {}
     try:
@@ -614,10 +713,8 @@ async def start(message: types.Message):
     user = message.from_user
     save_user(user.id, user.full_name or "Без имени", user.username)
 
-    await message.answer(
-        "Привет! 👋\n\n"
-        "Напиши сюда сообщение, и оператор ответит тебе."
-    )
+    settings = get_bot_settings()
+    await message.answer(settings.get("welcome_text") or "Привет! 👋\n\nНапиши сюда сообщение, и оператор ответит тебе.")
 
 
 @dp.message()
@@ -641,10 +738,174 @@ async def receive_message(message: types.Message):
 
     print(f"[MESSAGE] {user.id}: {media_type or 'text'} {text}")
 
-    await message.answer(
-        "Сообщение получено ✅\n"
-        "Ожидай ответа оператора."
-    )
+    settings = get_bot_settings()
+    if settings.get("auto_reply_enabled") == "1":
+        await message.answer(settings.get("auto_reply_text") or "Сообщение получено ✅\nОжидай ответа оператора.")
+
+
+
+def get_bot_settings():
+    db = get_db()
+    rows = db.execute("SELECT key,value FROM bot_settings").fetchall()
+    db.close()
+    return {r["key"]: r["value"] for r in rows}
+
+
+def set_bot_setting(key, value):
+    db = get_db(); db.execute("INSERT INTO bot_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, str(value))); db.commit(); db.close()
+
+
+def valid_username(value):
+    return bool(re.fullmatch(r"[A-Za-z0-9_.-]{3,32}", value or ""))
+
+
+def setup_needed():
+    db=get_db(); n=db.execute("SELECT COUNT(*) FROM operators").fetchone()[0]; db.close(); return n == 0
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if current_operator(): return redirect(request.args.get("next") or "/")
+    if setup_needed(): return redirect(url_for("setup"))
+    error = None
+    next_url = request.form.get("next") or request.args.get("next") or "/"
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        db=get_db(); op=db.execute("SELECT * FROM operators WHERE username=?", (username,)).fetchone(); db.close()
+        if op and check_password_hash(op["password_hash"], password):
+            session.clear(); session["operator_id"] = op["id"]; return redirect(next_url if next_url.startswith("/") else "/")
+        error="Неверный логин или пароль"
+    return render_template("login.html", error=error, next_url=next_url)
+
+
+@app.route("/setup", methods=["GET", "POST"])
+def setup():
+    if not setup_needed(): return redirect(url_for("login"))
+    error=None
+    if request.method == "POST":
+        username=request.form.get("username", "").strip(); display=request.form.get("display_name", "").strip() or username; password=request.form.get("password", ""); confirm=request.form.get("confirm", "")
+        if not valid_username(username): error="Логин: 3–32 символа, только латиница, цифры, _ . -"
+        elif len(password)<8: error="Пароль должен быть не короче 8 символов"
+        elif password!=confirm: error="Пароли не совпадают"
+        else:
+            db=get_db(); db.execute("INSERT INTO operators(username,display_name,password_hash,role) VALUES(?,?,?, 'admin')",(username,display,generate_password_hash(password))); db.commit(); op=db.execute("SELECT id FROM operators WHERE username=?",(username,)).fetchone(); db.close(); session.clear(); session["operator_id"]=op[0]; return redirect("/")
+    return render_template("setup.html", error=error)
+
+
+@app.route("/logout", methods=["POST", "GET"])
+def logout():
+    session.clear(); return redirect(url_for("login"))
+
+
+@app.context_processor
+def panel_context():
+    op=current_operator()
+    return {"operator": op, "operator_name": (op["display_name"] or op["username"]) if op else ""}
+
+
+@app.route("/api/updates")
+@login_required
+def api_updates():
+    try: since=int(request.args.get("since", -1))
+    except ValueError: since=-1
+    db=get_db(); rows=db.execute("""SELECT m.id,m.user_id,m.sender,m.text,m.created_at,u.name FROM messages m JOIN users u ON u.id=m.user_id WHERE m.id>? ORDER BY m.id ASC""",(since,)).fetchall()
+    unread=db.execute("""SELECT COUNT(*) FROM users u WHERE (SELECT sender FROM messages m WHERE m.user_id=u.id ORDER BY m.id DESC LIMIT 1)='user'""").fetchone()[0]
+    latest=db.execute("SELECT COALESCE(MAX(id),-1) FROM messages").fetchone()[0]; db.close()
+    return jsonify(new=[{"id":r["id"],"user_id":r["user_id"],"name":r["name"],"preview":r["text"] or MEDIA_LABELS.get("document","📎 Файл")} for r in rows], latest=latest, unread_total=unread)
+
+
+@app.route("/api/operators", methods=["GET","POST"])
+@admin_required
+def api_operators():
+    db=get_db()
+    if request.method=="POST":
+        data=request.get_json(silent=True) or {}; username=data.get("username","").strip(); name=data.get("display_name","").strip() or username; password=data.get("password",""); role=data.get("role","operator")
+        if not valid_username(username): db.close(); return jsonify(ok=False,error="Некорректный логин"),400
+        if len(password)<8: db.close(); return jsonify(ok=False,error="Пароль должен быть не короче 8 символов"),400
+        if role not in ("operator","admin"): role="operator"
+        try: db.execute("INSERT INTO operators(username,display_name,password_hash,role) VALUES(?,?,?,?)",(username,name,generate_password_hash(password),role)); db.commit()
+        except sqlite3.IntegrityError: db.close(); return jsonify(ok=False,error="Такой логин уже существует"),400
+        db.close(); return jsonify(ok=True)
+    rows=db.execute("SELECT id,username,display_name,role FROM operators ORDER BY id").fetchall(); db.close(); op=current_operator(); return jsonify(operators=[dict(r) for r in rows],me=op["id"])
+
+
+@app.route("/api/operators/<int:operator_id>/update", methods=["POST"])
+@admin_required
+def api_operator_update(operator_id):
+    data=request.get_json(silent=True) or {}; fields=[]; values=[]
+    if "display_name" in data:
+        name=str(data["display_name"]).strip()[:40]; fields.append("display_name=?"); values.append(name)
+    if "role" in data and data["role"] in ("operator","admin"): fields.append("role=?"); values.append(data["role"])
+    if data.get("password") is not None:
+        if len(str(data["password"]))<8: return jsonify(ok=False,error="Пароль должен быть не короче 8 символов"),400
+        fields.append("password_hash=?"); values.append(generate_password_hash(str(data["password"])))
+    if not fields: return jsonify(ok=False,error="Нет изменений"),400
+    values.append(operator_id); db=get_db(); db.execute("UPDATE operators SET "+", ".join(fields)+" WHERE id=?",values); db.commit(); db.close(); return jsonify(ok=True)
+
+
+@app.route("/api/operators/<int:operator_id>/delete", methods=["POST"])
+@admin_required
+def api_operator_delete(operator_id):
+    if current_operator()["id"]==operator_id: return jsonify(ok=False,error="Нельзя удалить себя"),400
+    db=get_db(); db.execute("DELETE FROM operators WHERE id=?",(operator_id,)); db.commit(); db.close(); return jsonify(ok=True)
+
+
+@app.route("/api/me/profile", methods=["POST"])
+@login_required
+def api_me_profile():
+    name=(request.get_json(silent=True) or {}).get("display_name","").strip()[:40]
+    db=get_db(); db.execute("UPDATE operators SET display_name=? WHERE id=?",(name,current_operator()["id"])); db.commit(); db.close(); return jsonify(ok=True)
+
+
+@app.route("/api/me/password", methods=["POST"])
+@login_required
+def api_me_password():
+    data=request.get_json(silent=True) or {}; current=data.get("current",""); new=data.get("new",""); op=current_operator()
+    if not check_password_hash(op["password_hash"],current): return jsonify(ok=False,error="Неверный текущий пароль"),400
+    if len(new)<8: return jsonify(ok=False,error="Новый пароль должен быть не короче 8 символов"),400
+    db=get_db(); db.execute("UPDATE operators SET password_hash=? WHERE id=?",(generate_password_hash(new),op["id"])); db.commit(); db.close(); return jsonify(ok=True)
+
+
+@app.route("/api/settings/bot", methods=["POST"])
+@admin_required
+def api_settings_bot():
+    data=request.get_json(silent=True) or {}
+    for key in ("welcome_text","auto_reply_text"):
+        if key in data: set_bot_setting(key,str(data[key])[:1000])
+    if "auto_reply_enabled" in data: set_bot_setting("auto_reply_enabled", "1" if data["auto_reply_enabled"] else "0")
+    return jsonify(ok=True)
+
+
+@app.route("/stats")
+@login_required
+def stats_page(): return render_template("stats.html")
+
+@app.route("/operators")
+@admin_required
+def operators_page(): return render_template("operators.html")
+
+@app.route("/settings")
+@login_required
+def settings_page(): return render_template("settings.html", bot_settings=get_bot_settings())
+
+
+@app.route("/api/stats")
+@login_required
+def api_stats():
+    db=get_db()
+    users_total=db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    in_total=db.execute("SELECT COUNT(*) FROM messages WHERE sender='user'").fetchone()[0]
+    out_total=db.execute("SELECT COUNT(*) FROM messages WHERE sender='admin'").fetchone()[0]
+    users_today=db.execute("SELECT COUNT(*) FROM users WHERE date(created_at)=date('now','localtime')").fetchone()[0]
+    in_today=db.execute("SELECT COUNT(*) FROM messages WHERE sender='user' AND date(created_at)=date('now','localtime')").fetchone()[0]
+    in_week=db.execute("SELECT COUNT(*) FROM messages WHERE sender='user' AND created_at>=datetime('now','-7 days')").fetchone()[0]
+    users_week=db.execute("SELECT COUNT(*) FROM users WHERE created_at>=datetime('now','-7 days')").fetchone()[0]
+    unanswered=db.execute("SELECT COUNT(*) FROM users u WHERE (SELECT sender FROM messages m WHERE m.user_id=u.id ORDER BY m.id DESC LIMIT 1)='user'").fetchone()[0]
+    daily=db.execute("SELECT date(created_at) day, SUM(sender='user') in_count, SUM(sender='admin') out_count FROM messages WHERE created_at>=date('now','-13 days') GROUP BY date(created_at) ORDER BY day").fetchall()
+    ops=db.execute("SELECT o.id,o.display_name name, (SELECT COUNT(*) FROM messages m WHERE m.sender='admin' AND m.operator_id=o.id AND m.created_at>=datetime('now','-7 days')) week, (SELECT COUNT(*) FROM messages m WHERE m.sender='admin' AND m.operator_id=o.id) total FROM operators o ORDER BY total DESC").fetchall()
+    top=db.execute("SELECT u.id,u.name,COUNT(m.id) total FROM users u JOIN messages m ON m.user_id=u.id GROUP BY u.id ORDER BY total DESC LIMIT 10").fetchall(); db.close()
+    return jsonify(users_total=users_total,users_today=users_today,users_week=users_week,in_today=in_today,in_week=in_week,in_total=in_total,out_total=out_total,unanswered=unanswered,avg_response=None,median_response=None,responses_count=0,daily=[{"day":r["day"],"in":r["in_count"] or 0,"out":r["out_count"] or 0} for r in daily],operators=[dict(r) for r in ops],top_users=[dict(r) for r in top])
 
 
 # =========================
@@ -666,6 +927,7 @@ def too_large(error):
 
 
 @app.route("/")
+@login_required
 def index():
     db = get_db()
     rows = db.execute("""
@@ -707,6 +969,7 @@ def index():
 
 
 @app.route("/avatar/<int:user_id>")
+@login_required
 def avatar(user_id):
     if not avatar_is_fresh(user_id) and telegram_loop is not None:
         future = asyncio.run_coroutine_threadsafe(
@@ -724,6 +987,7 @@ def avatar(user_id):
 
 
 @app.route("/media/<filename>")
+@login_required
 def media(filename):
     ext = Path(filename).suffix.lower()
 
@@ -739,6 +1003,7 @@ def media(filename):
 
 
 @app.route("/chat/<int:user_id>", methods=["GET", "POST"])
+@login_required
 def chat(user_id):
     db = get_db()
     user = db.execute(
@@ -774,6 +1039,7 @@ def chat(user_id):
 
 
 @app.route("/chat/<int:user_id>/send", methods=["POST"])
+@login_required
 def chat_send(user_id):
     """Текст и/или файлы от оператора."""
     if not user_exists(user_id):
@@ -810,6 +1076,7 @@ def chat_send(user_id):
 
 
 @app.route("/chat/<int:user_id>/sticker", methods=["POST"])
+@login_required
 def chat_send_sticker(user_id):
     """Отправить стикер/GIF/картинку из стикерпака."""
     if not user_exists(user_id):

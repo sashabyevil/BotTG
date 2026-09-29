@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Настройки — Mizu Support{% endblock %}
+
+{% block content %}
+<h1>⚙ Настройки</h1>
+
+<h2>Уведомления (только для этого браузера)</h2>
+<div class="card">
+    <label class="check"><input type="checkbox" id="optSound"> Звук при новом сообщении</label>
+    <label class="check"><input type="checkbox" id="optDesktop"> Уведомления рабочего стола (когда вкладка свёрнута)</label>
+    <label class="check"><input type="checkbox" id="optPreview"> Показывать текст сообщения в уведомлении</label>
+
+    <label class="field" for="optInterval">Как часто проверять новые сообщения</label>
+    <select id="optInterval">
+        <option value="2">Каждые 2 секунды</option>
+        <option value="3">Каждые 3 секунды</option>
+        <option value="5">Каждые 5 секунд</option>
+        <option value="10">Каждые 10 секунд</option>
+        <option value="30">Каждые 30 секунд</option>
+    </select>
+
+    <div class="row" style="margin-top: 16px">
+        <button type="button" id="testNotify">🔔 Проверить уведомление</button>
+    </div>
+    <p class="muted">Звук включится после первого клика по странице: так устроены браузеры.</p>
+</div>
+
+<h2>Профиль</h2>
+<div class="card">
+    <label class="field" for="displayName">Имя, которое видно в переписке</label>
+    <div class="row">
+        <input type="text" id="displayName" maxlength="40" value="{{ operator['display_name'] }}"
+               placeholder="{{ operator['username'] }}" style="flex: 1">
+        <button type="button" class="primary" id="saveProfile">Сохранить</button>
+    </div>
+    <p class="muted">Логин: <b>{{ operator['username'] }}</b> · Роль: {{ 'администратор' if operator['role'] == 'admin' else 'оператор' }}</p>
+
+    <label class="field" for="curPass">Смена пароля</label>
+    <input type="password" id="curPass" placeholder="Текущий пароль" autocomplete="current-password">
+    <input type="password" id="newPass" placeholder="Новый пароль (не короче 8 символов)" autocomplete="new-password" style="margin-top: 8px">
+    <input type="password" id="newPass2" placeholder="Повторите новый пароль" autocomplete="new-password" style="margin-top: 8px">
+    <div class="row" style="margin-top: 12px">
+        <button type="button" class="primary" id="savePass">Сменить пароль</button>
+    </div>
+</div>
+
+{% if operator['role'] == 'admin' %}
+<h2>Бот</h2>
+<div class="card">
+    <label class="field" for="welcomeText">Приветствие (по команде /start)</label>
+    <textarea id="welcomeText" maxlength="1000">{{ bot_settings['welcome_text'] }}</textarea>
+
+    <label class="check" style="margin-top: 10px">
+        <input type="checkbox" id="autoEnabled" {{ 'checked' if bot_settings['auto_reply_enabled'] == '1' else '' }}>
+        Отвечать автоматически на сообщения пользователей
+    </label>
+    <textarea id="autoText" maxlength="1000">{{ bot_settings['auto_reply_text'] }}</textarea>
+    <p class="muted">Автоответ отправляется не чаще раза в 5 минут для одного пользователя.</p>
+
+    <div class="row" style="margin-top: 12px">
+        <button type="button" class="primary" id="saveBot">Сохранить</button>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const settings = Panel.getSettings();
+
+const optSound = document.getElementById("optSound");
+const optDesktop = document.getElementById("optDesktop");
+const optPreview = document.getElementById("optPreview");
+const optInterval = document.getElementById("optInterval");
+
+optSound.checked = settings.sound;
+optDesktop.checked = settings.desktop;
+optPreview.checked = settings.preview;
+optInterval.value = String(settings.interval);
+
+optSound.onchange = () => Panel.saveSettings({sound: optSound.checked});
+optPreview.onchange = () => Panel.saveSettings({preview: optPreview.checked});
+optInterval.onchange = () => Panel.saveSettings({interval: Number(optInterval.value)});
+
+optDesktop.onchange = async () => {
+    if (!optDesktop.checked) {
+        Panel.saveSettings({desktop: false});
+        return;
+    }
+
+    const permission = await Panel.requestDesktop();
+
+    if (permission === "granted") {
+        Panel.saveSettings({desktop: true});
+    } else {
+        optDesktop.checked = false;
+        Panel.saveSettings({desktop: false});
+        Panel.toast(
+            permission === "unsupported"
+                ? "Этот браузер не поддерживает уведомления"
+                : "Браузер запретил уведомления. Разрешите их в настройках сайта.",
+            true
+        );
+    }
+};
+
+document.getElementById("testNotify").onclick = () => {
+    if (Panel.getSettings().sound) Panel.beep();
+    Panel.notify({user_id: 0, name: "Тестовое уведомление", preview: "Так будет выглядеть новое сообщение"});
+};
+
+document.getElementById("saveProfile").onclick = async () => {
+    const result = await Panel.api("/api/me/profile", {
+        display_name: document.getElementById("displayName").value,
+    });
+    Panel.toast(result.ok ? "Имя сохранено" : (result.error || "Ошибка"), !result.ok);
+};
+
+document.getElementById("savePass").onclick = async () => {
+    const current = document.getElementById("curPass").value;
+    const next = document.getElementById("newPass").value;
+
+    if (next !== document.getElementById("newPass2").value) {
+        Panel.toast("Новые пароли не совпадают", true);
+        return;
+    }
+
+    const result = await Panel.api("/api/me/password", {current, new: next});
+
+    if (result.ok) {
+        ["curPass", "newPass", "newPass2"].forEach(id => { document.getElementById(id).value = ""; });
+        Panel.toast("Пароль изменён. На других устройствах потребуется войти заново.");
+    } else {
+        Panel.toast(result.error || "Ошибка", true);
+    }
+};
+
+const saveBot = document.getElementById("saveBot");
+if (saveBot) {
+    saveBot.onclick = async () => {
+        const result = await Panel.api("/api/settings/bot", {
+            welcome_text: document.getElementById("welcomeText").value,
+            auto_reply_enabled: document.getElementById("autoEnabled").checked,
+            auto_reply_text: document.getElementById("autoText").value,
+        });
+        Panel.toast(result.ok ? "Настройки бота сохранены" : (result.error || "Ошибка"), !result.ok);
+    };
+}
+
+Panel.start();
+</script>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "auth.html" %}
+{% block title %}Первый запуск{% endblock %}
+{% block content %}
+<h1>Первый запуск</h1>
+<p class="sub">Создайте учётную запись администратора. Остальных операторов можно добавить позже в разделе «Операторы».</p>
+
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+<form method="post">
+    <label for="username">Логин (латиница, цифры, _ . -)</label>
+    <input id="username" name="username" type="text" autocomplete="username" autofocus required
+           value="{{ request.form.get('username', '') }}">
+
+    <label for="display_name">Имя в переписке (необязательно)</label>
+    <input id="display_name" name="display_name" type="text" maxlength="40"
+           value="{{ request.form.get('display_name', '') }}">
+
+    <label for="password">Пароль (не короче 8 символов)</label>
+    <input id="password" name="password" type="password" autocomplete="new-password" required>
+
+    <label for="confirm">Повторите пароль</label>
+    <input id="confirm" name="confirm" type="password" autocomplete="new-password" required>
+
+    <button type="submit">Создать и войти</button>
+</form>
+{% endblock %}
