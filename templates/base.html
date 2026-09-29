@@ -4,13 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Mizu Support{% endblock %}</title>
+<link rel="stylesheet" href="/static/theme.css">
+<script src="/static/theme.js"></script>
 <style>
 * { box-sizing: border-box; }
 
 body {
     margin: 0;
-    background: #0f172a;
-    color: #e5e7eb;
+    background: var(--bg);
+    color: var(--text);
     font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 }
 
@@ -19,22 +21,22 @@ body {
     align-items: center;
     gap: 18px;
     flex-wrap: wrap;
-    background: #1e293b;
-    border-bottom: 1px solid #334155;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
     padding: 10px 20px;
 }
-.brand { font-size: 19px; font-weight: 700; color: #fff; text-decoration: none; }
+.brand { font-size: 19px; font-weight: 700; color: var(--text-strong); text-decoration: none; }
 .topbar nav { display: flex; gap: 4px; flex-wrap: wrap; margin-right: auto; }
 .topbar nav a {
-    color: #cbd5e1;
+    color: var(--text-nav);
     text-decoration: none;
     font-size: 14px;
     padding: 7px 12px;
     border-radius: 10px;
 }
-.topbar nav a:hover { background: #334155; color: #fff; }
-.topbar nav a.active { background: #0f172a; color: #fff; }
-.who { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #94a3b8; }
+.topbar nav a:hover { background: var(--btn); color: var(--text-strong); }
+.topbar nav a.active { background: var(--bg); color: var(--text-strong); }
+.who { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-2); }
 .who form { margin: 0; }
 
 .badge {
@@ -58,51 +60,51 @@ h2 {
     font-size: 13px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #94a3b8;
+    color: var(--text-2);
 }
 
 .card {
-    background: #1e293b;
-    border: 1px solid #334155;
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 14px;
     padding: 18px;
     margin-bottom: 14px;
 }
 
-label.field { display: block; font-size: 13px; color: #94a3b8; margin: 12px 0 6px; }
+label.field { display: block; font-size: 13px; color: var(--text-2); margin: 12px 0 6px; }
 input[type="text"], input[type="password"], input[type="search"], select, textarea {
     width: 100%;
     padding: 10px 14px;
     border-radius: 10px;
-    border: 1px solid #334155;
-    background: #0f172a;
-    color: #fff;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-strong);
     font-size: 15px;
     font-family: inherit;
     outline: none;
 }
-input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
+input:focus, select:focus, textarea:focus { border-color: var(--focus); }
 textarea { min-height: 90px; resize: vertical; }
 
 button, .btn {
     border: none;
-    color: #fff;
+    color: var(--text-strong);
     cursor: pointer;
     font-size: 14px;
     border-radius: 10px;
     padding: 9px 16px;
-    background: #334155;
+    background: var(--btn);
     text-decoration: none;
     display: inline-block;
 }
-button:hover, .btn:hover { background: #475569; }
-button.primary { background: #2563eb; }
-button.primary:hover { background: #1d4ed8; }
+button:hover, .btn:hover { background: var(--btn-hover); }
+button.primary { background: var(--accent); }
+button.primary:hover { background: var(--accent-hover); }
 button.danger:hover { background: #b91c1c; }
 button:disabled { opacity: 0.5; cursor: default; }
 
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.muted { color: #94a3b8; font-size: 14px; }
+.muted { color: var(--text-2); font-size: 14px; }
 .check { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-size: 15px; cursor: pointer; }
 .check input { width: 18px; height: 18px; }
 </style>
@@ -122,6 +124,11 @@ button:disabled { opacity: 0.5; cursor: default; }
         <a href="/settings" class="{{ 'active' if request.path == '/settings' else '' }}">⚙ Настройки</a>
     </nav>
     <div class="who">
+        <div class="theme-switch" title="Тема оформления">
+            <button type="button" class="theme-dot" data-theme-set="dark" title="Тёмная" aria-label="Тёмная тема"></button>
+            <button type="button" class="theme-dot" data-theme-set="purple" title="Фиолетовая" aria-label="Фиолетовая тема"></button>
+            <button type="button" class="theme-dot" data-theme-set="light" title="Белая" aria-label="Белая тема"></button>
+        </div>
         <span>{{ operator_name }}</span>
         <form method="post" action="/logout"><button type="submit">Выйти</button></form>
     </div>

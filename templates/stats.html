@@ -4,10 +4,10 @@
 {% block head %}
 <style>
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
-.stat { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 16px; }
+.stat { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
 .stat .num { font-size: 28px; font-weight: 700; }
-.stat .label { color: #94a3b8; font-size: 13px; margin-top: 4px; }
-.stat .extra { color: #64748b; font-size: 12px; margin-top: 6px; }
+.stat .label { color: var(--text-2); font-size: 13px; margin-top: 4px; }
+.stat .extra { color: var(--text-3); font-size: 12px; margin-top: 6px; }
 .stat.warn .num { color: #f59e0b; }
 
 .chart { display: flex; align-items: flex-end; gap: 6px; height: 180px; padding-top: 10px; }
@@ -16,16 +16,16 @@
 .bar { width: 40%; max-width: 16px; border-radius: 4px 4px 0 0; min-height: 2px; }
 .bar.in { background: #3b82f6; }
 .bar.out { background: #22c55e; }
-.col .day { font-size: 10px; color: #64748b; margin-top: 6px; white-space: nowrap; }
-.legend { display: flex; gap: 16px; font-size: 13px; color: #94a3b8; margin-top: 12px; }
+.col .day { font-size: 10px; color: var(--text-3); margin-top: 6px; white-space: nowrap; }
+.legend { display: flex; gap: 16px; font-size: 13px; color: var(--text-2); margin-top: 12px; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
 
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th, td { text-align: left; padding: 9px 6px; border-bottom: 1px solid #334155; }
-th { color: #94a3b8; font-weight: 500; font-size: 13px; }
+th, td { text-align: left; padding: 9px 6px; border-bottom: 1px solid var(--border); }
+th { color: var(--text-2); font-weight: 500; font-size: 13px; }
 td.n, th.n { text-align: right; }
 tr:last-child td { border-bottom: none; }
-a { color: #93c5fd; text-decoration: none; }
+a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; }
 </style>
 {% endblock %}

@@ -4,73 +4,75 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Стикеры и GIF</title>
+<link rel="stylesheet" href="/static/theme.css">
+<script src="/static/theme.js"></script>
 <style>
 * { box-sizing: border-box; }
 
 body {
     margin: 0;
-    background: #0f172a;
-    color: #e5e7eb;
+    background: var(--bg);
+    color: var(--text);
     font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 }
 .header {
     display: flex;
     align-items: center;
     gap: 14px;
-    background: #1e293b;
-    border-bottom: 1px solid #334155;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
     padding: 14px 20px;
     font-size: 20px;
     font-weight: 700;
 }
 .back {
-    color: #94a3b8;
+    color: var(--text-2);
     text-decoration: none;
     font-size: 22px;
     padding: 2px 8px;
     border-radius: 8px;
 }
-.back:hover { background: #334155; color: #fff; }
+.back:hover { background: var(--btn); color: var(--text-strong); }
 
 .container { max-width: 900px; margin: 0 auto; padding: 24px 20px; }
 
 .hint {
-    color: #94a3b8;
+    color: var(--text-2);
     font-size: 14px;
     line-height: 1.5;
     margin-bottom: 20px;
 }
-.hint code { background: #1e293b; padding: 2px 6px; border-radius: 6px; }
+.hint code { background: var(--surface); padding: 2px 6px; border-radius: 6px; }
 
 .create { display: flex; gap: 8px; margin-bottom: 28px; }
 input[type="text"] {
     flex: 1;
     padding: 11px 14px;
     border-radius: 10px;
-    border: 1px solid #334155;
-    background: #1e293b;
-    color: #fff;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-strong);
     font-size: 15px;
     outline: none;
 }
-input[type="text"]:focus { border-color: #3b82f6; }
+input[type="text"]:focus { border-color: var(--focus); }
 
 button {
     border: none;
-    color: #fff;
+    color: var(--text-strong);
     cursor: pointer;
     font-size: 14px;
     border-radius: 10px;
     padding: 10px 16px;
-    background: #334155;
+    background: var(--btn);
 }
-button:hover { background: #475569; }
-button.primary { background: #2563eb; }
-button.primary:hover { background: #1d4ed8; }
+button:hover { background: var(--btn-hover); }
+button.primary { background: var(--accent); }
+button.primary:hover { background: var(--accent-hover); }
 button.danger:hover { background: #b91c1c; }
 
 .pack {
-    background: #1e293b;
+    background: var(--surface);
     border-radius: 14px;
     padding: 16px;
     margin-bottom: 18px;
@@ -83,7 +85,7 @@ button.danger:hover { background: #b91c1c; }
     flex-wrap: wrap;
 }
 .pack-name { font-size: 17px; font-weight: 600; margin-right: auto; }
-.pack-count { color: #64748b; font-size: 13px; margin-left: 8px; font-weight: normal; }
+.pack-count { color: var(--text-3); font-size: 13px; margin-left: 8px; font-weight: normal; }
 
 .grid {
     display: grid;
@@ -93,7 +95,7 @@ button.danger:hover { background: #b91c1c; }
 .item {
     position: relative;
     aspect-ratio: 1;
-    background: #0f172a;
+    background: var(--bg);
     border-radius: 10px;
     overflow: hidden;
     display: flex;
@@ -114,15 +116,15 @@ button.danger:hover { background: #b91c1c; }
 .item .del:hover { background: #b91c1c; }
 @media (hover: none) { .item .del { opacity: 1; } }
 
-.empty { color: #64748b; text-align: center; padding: 40px 0; }
+.empty { color: var(--text-3); text-align: center; padding: 40px 0; }
 
 #toast {
     position: fixed;
     left: 50%;
     bottom: 30px;
     transform: translateX(-50%);
-    background: #0b1220;
-    border: 1px solid #334155;
+    background: var(--toast-bg);
+    border: 1px solid var(--border);
     padding: 10px 16px;
     border-radius: 12px;
     font-size: 14px;

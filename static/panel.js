@@ -27,8 +27,8 @@
     style.textContent = `
         #pnStack { position: fixed; top: 16px; right: 16px; z-index: 1000;
                    display: flex; flex-direction: column; gap: 8px; max-width: 320px; }
-        .pn-toast { background: #0b1220; border: 1px solid #334155; border-left: 4px solid #3b82f6;
-                    border-radius: 12px; padding: 10px 14px; color: #e5e7eb; cursor: pointer;
+        .pn-toast { background: var(--toast-bg, #0b1220); border: 1px solid var(--border, #334155); border-left: 4px solid var(--focus, #3b82f6);
+                    border-radius: 12px; padding: 10px 14px; color: var(--text, #e5e7eb); cursor: pointer;
                     font: 14px -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
                     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); }
         .pn-toast.error { border-left-color: #ef4444; }

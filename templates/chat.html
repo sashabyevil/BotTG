@@ -4,13 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Чат с {{ user['name'] }}</title>
+<link rel="stylesheet" href="/static/theme.css">
+<script src="/static/theme.js"></script>
 <style>
 * { box-sizing: border-box; }
 
 body {
     margin: 0;
-    background: #0f172a;
-    color: #e5e7eb;
+    background: var(--bg);
+    color: var(--text);
     font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
     display: flex;
     flex-direction: column;
@@ -23,24 +25,24 @@ body {
     align-items: center;
     gap: 14px;
     padding: 12px 20px;
-    background: #1e293b;
-    border-bottom: 1px solid #334155;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
 }
 .back {
-    color: #94a3b8;
+    color: var(--text-2);
     text-decoration: none;
     font-size: 22px;
     line-height: 1;
     padding: 4px 8px;
     border-radius: 8px;
 }
-.back:hover { background: #334155; color: #fff; }
+.back:hover { background: var(--btn); color: var(--text-strong); }
 
 .avatar {
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    background: linear-gradient(135deg, var(--focus), #8b5cf6);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -58,7 +60,7 @@ body {
     object-fit: cover;
 }
 .title { font-size: 16px; font-weight: 600; }
-.subtitle { font-size: 13px; color: #94a3b8; }
+.subtitle { font-size: 13px; color: var(--text-2); }
 
 /* ---------- сообщения ---------- */
 .scroll {
@@ -86,12 +88,12 @@ body {
     overflow-wrap: anywhere;
 }
 .message.user {
-    background: #334155;
+    background: var(--btn);
     align-self: flex-start;
     border-bottom-left-radius: 4px;
 }
 .message.admin {
-    background: #2563eb;
+    background: var(--accent);
     color: #fff;
     align-self: flex-end;
     border-bottom-right-radius: 4px;
@@ -130,10 +132,10 @@ audio.media { width: 260px; max-width: 100%; }
     padding: 8px 10px;
     color: inherit;
     text-decoration: none;
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--file-bg);
     border-radius: 10px;
 }
-.file:hover { background: rgba(255, 255, 255, 0.16); }
+.file:hover { background: var(--file-hover); }
 .missing, .emoji-sticker { padding: 6px 10px; opacity: 0.8; font-size: 14px; }
 .emoji-sticker { font-size: 56px; opacity: 1; line-height: 1.1; }
 .emoji-sticker small { display: block; font-size: 11px; opacity: 0.6; }
@@ -156,15 +158,15 @@ audio.media { width: 260px; max-width: 100%; }
 .save-btn:hover { background: rgba(15, 23, 42, 0.95); }
 @media (hover: none) { .save-btn { opacity: 1; } }
 
-.empty { text-align: center; color: #64748b; margin-top: 40px; }
+.empty { text-align: center; color: var(--text-3); margin-top: 40px; }
 
 /* ---------- панель стикеров ---------- */
 .picker {
     display: none;
     flex-direction: column;
     height: 300px;
-    background: #1e293b;
-    border-top: 1px solid #334155;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
 }
 .picker.open { display: flex; }
 .picker-grid {
@@ -182,7 +184,7 @@ audio.media { width: 260px; max-width: 100%; }
 .picker-item {
     aspect-ratio: 1;
     border-radius: 10px;
-    background: #0f172a;
+    background: var(--bg);
     cursor: pointer;
     overflow: hidden;
     display: flex;
@@ -190,7 +192,7 @@ audio.media { width: 260px; max-width: 100%; }
     justify-content: center;
     border: 2px solid transparent;
 }
-.picker-item:hover { border-color: #3b82f6; }
+.picker-item:hover { border-color: var(--focus); }
 .picker-item img, .picker-item video {
     width: 100%;
     height: 100%;
@@ -199,7 +201,7 @@ audio.media { width: 260px; max-width: 100%; }
 .picker-empty {
     grid-column: 1 / -1;
     text-align: center;
-    color: #64748b;
+    color: var(--text-3);
     padding: 30px 10px;
     line-height: 1.5;
 }
@@ -208,7 +210,7 @@ audio.media { width: 260px; max-width: 100%; }
     align-items: center;
     gap: 6px;
     padding: 8px 20px;
-    border-top: 1px solid #334155;
+    border-top: 1px solid var(--border);
     overflow-x: auto;
 }
 .tab {
@@ -216,26 +218,26 @@ audio.media { width: 260px; max-width: 100%; }
     padding: 6px 12px;
     border-radius: 16px;
     border: none;
-    background: #0f172a;
-    color: #cbd5e1;
+    background: var(--bg);
+    color: var(--text-nav);
     font-size: 13px;
     cursor: pointer;
 }
-.tab.active { background: #2563eb; color: #fff; }
+.tab.active { background: var(--accent); color: #fff; }
 .tab-manage {
     margin-left: auto;
     flex-shrink: 0;
-    color: #94a3b8;
+    color: var(--text-2);
     font-size: 13px;
     text-decoration: none;
     padding: 6px 8px;
 }
-.tab-manage:hover { color: #fff; }
+.tab-manage:hover { color: var(--text-strong); }
 
 /* ---------- форма ---------- */
 .form-wrap {
-    background: #1e293b;
-    border-top: 1px solid #334155;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
     padding: 12px 20px;
 }
 .form-inner {
@@ -257,8 +259,8 @@ audio.media { width: 260px; max-width: 100%; }
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: #0f172a;
-    border: 1px solid #334155;
+    background: var(--bg);
+    border: 1px solid var(--border);
     border-radius: 14px;
     padding: 4px 6px 4px 10px;
     font-size: 13px;
@@ -274,46 +276,46 @@ audio.media { width: 260px; max-width: 100%; }
     background: none;
     border-radius: 50%;
     font-size: 14px;
-    color: #94a3b8;
+    color: var(--text-2);
 }
-.chip button:hover { background: #334155; color: #fff; }
+.chip button:hover { background: var(--btn); color: var(--text-strong); }
 
 input[type="text"] {
     flex: 1;
     min-width: 0;
     padding: 12px 16px;
     border-radius: 24px;
-    border: 1px solid #334155;
-    background: #0f172a;
-    color: #fff;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-strong);
     outline: none;
     font-size: 15px;
 }
-input[type="text"]:focus { border-color: #3b82f6; }
+input[type="text"]:focus { border-color: var(--focus); }
 button {
     border: none;
-    color: #fff;
+    color: var(--text-strong);
     cursor: pointer;
     font-size: 15px;
 }
 .send {
     padding: 0 22px;
     border-radius: 24px;
-    background: #2563eb;
+    background: var(--accent);
     font-weight: 600;
 }
-.send:hover { background: #1d4ed8; }
+.send:hover { background: var(--accent-hover); }
 .send:disabled { opacity: 0.5; cursor: default; }
 .icon-btn {
     width: 44px;
     height: 44px;
     border-radius: 50%;
-    background: #0f172a;
-    border: 1px solid #334155;
+    background: var(--bg);
+    border: 1px solid var(--border);
     font-size: 19px;
     flex-shrink: 0;
 }
-.icon-btn:hover, .icon-btn.active { background: #334155; }
+.icon-btn:hover, .icon-btn.active { background: var(--btn); }
 
 /* ---------- прочее ---------- */
 .drop-hint {
@@ -321,7 +323,7 @@ button {
     position: fixed;
     inset: 0;
     background: rgba(37, 99, 235, 0.25);
-    border: 3px dashed #3b82f6;
+    border: 3px dashed var(--focus);
     z-index: 50;
     align-items: center;
     justify-content: center;
@@ -335,8 +337,8 @@ button {
     left: 50%;
     bottom: 90px;
     transform: translateX(-50%);
-    background: #0b1220;
-    border: 1px solid #334155;
+    background: var(--toast-bg);
+    border: 1px solid var(--border);
     padding: 10px 16px;
     border-radius: 12px;
     font-size: 14px;
@@ -348,9 +350,9 @@ button {
 #toast.show { display: block; }
 
 dialog {
-    background: #1e293b;
-    color: #e5e7eb;
-    border: 1px solid #334155;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
     border-radius: 14px;
     padding: 20px;
     width: 320px;
@@ -362,18 +364,18 @@ dialog select, dialog input[type="text"] {
     margin-bottom: 10px;
     border-radius: 10px;
     padding: 10px 12px;
-    border: 1px solid #334155;
-    background: #0f172a;
-    color: #fff;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-strong);
     font-size: 14px;
 }
 .dialog-buttons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
 .dialog-buttons button {
     padding: 8px 16px;
     border-radius: 10px;
-    background: #334155;
+    background: var(--btn);
 }
-.dialog-buttons .primary { background: #2563eb; }
+.dialog-buttons .primary { background: var(--accent); }
 </style>
 </head>
 <body data-user-id="{{ user['id'] }}">
