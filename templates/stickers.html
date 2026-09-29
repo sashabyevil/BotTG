@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Стикеры и GIF</title>
+<style>
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: #0f172a;
+    color: #e5e7eb;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+.header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: #1e293b;
+    border-bottom: 1px solid #334155;
+    padding: 14px 20px;
+    font-size: 20px;
+    font-weight: 700;
+}
+.back {
+    color: #94a3b8;
+    text-decoration: none;
+    font-size: 22px;
+    padding: 2px 8px;
+    border-radius: 8px;
+}
+.back:hover { background: #334155; color: #fff; }
+
+.container { max-width: 900px; margin: 0 auto; padding: 24px 20px; }
+
+.hint {
+    color: #94a3b8;
+    font-size: 14px;
+    line-height: 1.5;
+    margin-bottom: 20px;
+}
+.hint code { background: #1e293b; padding: 2px 6px; border-radius: 6px; }
+
+.create { display: flex; gap: 8px; margin-bottom: 28px; }
+input[type="text"] {
+    flex: 1;
+    padding: 11px 14px;
+    border-radius: 10px;
+    border: 1px solid #334155;
+    background: #1e293b;
+    color: #fff;
+    font-size: 15px;
+    outline: none;
+}
+input[type="text"]:focus { border-color: #3b82f6; }
+
+button {
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    border-radius: 10px;
+    padding: 10px 16px;
+    background: #334155;
+}
+button:hover { background: #475569; }
+button.primary { background: #2563eb; }
+button.primary:hover { background: #1d4ed8; }
+button.danger:hover { background: #b91c1c; }
+
+.pack {
+    background: #1e293b;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 18px;
+}
+.pack-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+.pack-name { font-size: 17px; font-weight: 600; margin-right: auto; }
+.pack-count { color: #64748b; font-size: 13px; margin-left: 8px; font-weight: normal; }
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 10px;
+}
+.item {
+    position: relative;
+    aspect-ratio: 1;
+    background: #0f172a;
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.item img, .item video { width: 100%; height: 100%; object-fit: contain; }
+.item .del {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    padding: 2px 7px;
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.8);
+    opacity: 0;
+}
+.item:hover .del { opacity: 1; }
+.item .del:hover { background: #b91c1c; }
+@media (hover: none) { .item .del { opacity: 1; } }
+
+.empty { color: #64748b; text-align: center; padding: 40px 0; }
+
+#toast {
+    position: fixed;
+    left: 50%;
+    bottom: 30px;
+    transform: translateX(-50%);
+    background: #0b1220;
+    border: 1px solid #334155;
+    padding: 10px 16px;
+    border-radius: 12px;
+    font-size: 14px;
+    display: none;
+}
+#toast.error { border-color: #ef4444; }
+#toast.show { display: block; }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <a class="back" href="/">←</a>
+    <span>😊 Стикеры и GIF</span>
+</div>
+
+<div class="container">
+    <div class="hint">
+        Каждый пак — это папка в <code>stickers/</code> рядом с <code>bot.py</code>.
+        Файлы можно добавлять здесь, сохранять из чата кнопкой 💾 или просто
+        положить в папку руками (webp, png, jpg, gif, mp4, webm).
+    </div>
+
+    <div class="create">
+        <input type="text" id="newPackName" placeholder="Название нового пака" maxlength="40">
+        <button class="primary" id="createBtn">Создать пак</button>
+    </div>
+
+    <div id="packs"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const packsBox = document.getElementById("packs");
+
+function toast(text, isError) {
+    const el = document.getElementById("toast");
+    el.textContent = text;
+    el.className = "show" + (isError ? " error" : "");
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => { el.className = ""; }, 3500);
+}
+
+async function api(url, body) {
+    const response = await fetch(url, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(body),
+    });
+    const result = await response.json();
+    if (!result.ok) toast(result.error || "Ошибка", true);
+    return result;
+}
+
+function fileUrl(pack, file) {
+    return "/sticker-file/" + encodeURIComponent(pack) + "/" + encodeURIComponent(file);
+}
+
+function button(text, className, onclick) {
+    const btn = document.createElement("button");
+    btn.textContent = text;
+    if (className) btn.className = className;
+    btn.onclick = onclick;
+    return btn;
+}
+
+async function upload(pack, files) {
+    const data = new FormData();
+    data.append("pack", pack);
+    for (const file of files) data.append("files", file);
+
+    const response = await fetch("/api/stickers/upload", {method: "POST", body: data});
+    const result = await response.json();
+
+    if (result.ok) toast("Добавлено файлов: " + result.saved);
+    else toast(result.error || "Ошибка", true);
+
+    load();
+}
+
+function renderPack(pack) {
+    const section = document.createElement("div");
+    section.className = "pack";
+
+    const head = document.createElement("div");
+    head.className = "pack-head";
+
+    const name = document.createElement("div");
+    name.className = "pack-name";
+    name.textContent = pack.name;
+    const count = document.createElement("span");
+    count.className = "pack-count";
+    count.textContent = pack.items.length;
+    name.appendChild(count);
+
+    const picker = document.createElement("input");
+    picker.type = "file";
+    picker.multiple = true;
+    picker.accept = ".webp,.png,.jpg,.jpeg,.gif,.mp4,.webm";
+    picker.hidden = true;
+    picker.onchange = () => upload(pack.name, picker.files);
+
+    head.append(
+        name,
+        picker,
+        button("＋ Файлы", "primary", () => picker.click()),
+        button("✏️", "", async () => {
+            const newName = prompt("Новое название пака:", pack.name);
+            if (newName && newName !== pack.name) {
+                const result = await api("/api/packs/rename", {name: pack.name, new_name: newName});
+                if (result.ok) load();
+            }
+        }),
+        button("🗑", "danger", async () => {
+            if (confirm("Удалить пак «" + pack.name + "» вместе со всеми файлами?")) {
+                const result = await api("/api/packs/delete", {name: pack.name});
+                if (result.ok) load();
+            }
+        })
+    );
+
+    const grid = document.createElement("div");
+    grid.className = "grid";
+
+    pack.items.forEach(item => {
+        const cell = document.createElement("div");
+        cell.className = "item";
+
+        let media;
+        if (item.video) {
+            media = document.createElement("video");
+            media.muted = true;
+            media.loop = true;
+            media.playsInline = true;
+            media.preload = "metadata";
+            cell.onmouseenter = () => media.play();
+            cell.onmouseleave = () => { media.pause(); media.currentTime = 0; };
+        } else {
+            media = document.createElement("img");
+            media.loading = "lazy";
+        }
+        media.src = fileUrl(pack.name, item.file);
+
+        const del = button("✕", "del", async () => {
+            const result = await api("/api/stickers/delete", {pack: pack.name, file: item.file});
+            if (result.ok) load();
+        });
+
+        cell.append(media, del);
+        grid.appendChild(cell);
+    });
+
+    if (!pack.items.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "Пока пусто";
+        section.append(head, empty);
+    } else {
+        section.append(head, grid);
+    }
+
+    return section;
+}
+
+async function load() {
+    const response = await fetch("/api/stickers");
+    const {packs} = await response.json();
+
+    packsBox.innerHTML = "";
+
+    if (!packs.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "Паков пока нет. Создай первый выше.";
+        packsBox.appendChild(empty);
+        return;
+    }
+
+    packs.forEach(pack => packsBox.appendChild(renderPack(pack)));
+}
+
+async function createPack() {
+    const input = document.getElementById("newPackName");
+    const name = input.value.trim();
+    if (!name) return;
+
+    const result = await api("/api/packs", {name});
+    if (result.ok) {
+        input.value = "";
+        load();
+    }
+}
+
+document.getElementById("createBtn").onclick = createPack;
+document.getElementById("newPackName").addEventListener("keydown", e => {
+    if (e.key === "Enter") createPack();
+});
+
+load();
+</script>
+
+</body>
+</html>

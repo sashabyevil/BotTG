@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Чат с {{ user['name'] }}</title>
+<style>
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: #0f172a;
+    color: #e5e7eb;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* ---------- шапка ---------- */
+.header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 20px;
+    background: #1e293b;
+    border-bottom: 1px solid #334155;
+}
+.back {
+    color: #94a3b8;
+    text-decoration: none;
+    font-size: 22px;
+    line-height: 1;
+    padding: 4px 8px;
+    border-radius: 8px;
+}
+.back:hover { background: #334155; color: #fff; }
+
+.avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: #fff;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+}
+.avatar img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.title { font-size: 16px; font-weight: 600; }
+.subtitle { font-size: 13px; color: #94a3b8; }
+
+/* ---------- сообщения ---------- */
+.scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+#messages {
+    max-width: 800px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.message {
+    position: relative;
+    width: fit-content;
+    max-width: 75%;
+    padding: 8px 12px 6px;
+    border-radius: 16px;
+    line-height: 1.4;
+    font-size: 15px;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+}
+.message.user {
+    background: #334155;
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+}
+.message.admin {
+    background: #2563eb;
+    color: #fff;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+}
+.text { white-space: pre-wrap; }
+.time {
+    font-size: 11px;
+    opacity: 0.6;
+    text-align: right;
+    margin-top: 2px;
+}
+.message.has-media { padding: 4px 4px 6px; }
+.message.has-media .text { padding: 4px 8px 0; }
+.message.has-media .time { padding: 0 8px; }
+
+.media {
+    display: block;
+    max-width: 100%;
+    max-height: 380px;
+    border-radius: 12px;
+}
+img.media, video.media { width: auto; height: auto; }
+.media.round {
+    width: 220px;
+    height: 220px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.media.sticker { max-height: 180px; background: none; }
+audio.media { width: 260px; max-width: 100%; }
+
+.file {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    color: inherit;
+    text-decoration: none;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+}
+.file:hover { background: rgba(255, 255, 255, 0.16); }
+.missing, .emoji-sticker { padding: 6px 10px; opacity: 0.8; font-size: 14px; }
+.emoji-sticker { font-size: 56px; opacity: 1; line-height: 1.1; }
+.emoji-sticker small { display: block; font-size: 11px; opacity: 0.6; }
+
+.save-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    border: none;
+    border-radius: 8px;
+    padding: 4px 8px;
+    background: rgba(15, 23, 42, 0.75);
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.message:hover .save-btn { opacity: 1; }
+.save-btn:hover { background: rgba(15, 23, 42, 0.95); }
+@media (hover: none) { .save-btn { opacity: 1; } }
+
+.empty { text-align: center; color: #64748b; margin-top: 40px; }
+
+/* ---------- панель стикеров ---------- */
+.picker {
+    display: none;
+    flex-direction: column;
+    height: 300px;
+    background: #1e293b;
+    border-top: 1px solid #334155;
+}
+.picker.open { display: flex; }
+.picker-grid {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    gap: 8px;
+    align-content: start;
+    max-width: 800px;
+    width: 100%;
+    margin: 0 auto;
+}
+.picker-item {
+    aspect-ratio: 1;
+    border-radius: 10px;
+    background: #0f172a;
+    cursor: pointer;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid transparent;
+}
+.picker-item:hover { border-color: #3b82f6; }
+.picker-item img, .picker-item video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+.picker-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: #64748b;
+    padding: 30px 10px;
+    line-height: 1.5;
+}
+.picker-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 20px;
+    border-top: 1px solid #334155;
+    overflow-x: auto;
+}
+.tab {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    border-radius: 16px;
+    border: none;
+    background: #0f172a;
+    color: #cbd5e1;
+    font-size: 13px;
+    cursor: pointer;
+}
+.tab.active { background: #2563eb; color: #fff; }
+.tab-manage {
+    margin-left: auto;
+    flex-shrink: 0;
+    color: #94a3b8;
+    font-size: 13px;
+    text-decoration: none;
+    padding: 6px 8px;
+}
+.tab-manage:hover { color: #fff; }
+
+/* ---------- форма ---------- */
+.form-wrap {
+    background: #1e293b;
+    border-top: 1px solid #334155;
+    padding: 12px 20px;
+}
+.form-inner {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+}
+.attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-width: 800px;
+    margin: 0 auto 8px;
+}
+.attachments:empty { display: none; }
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 14px;
+    padding: 4px 6px 4px 10px;
+    font-size: 13px;
+    max-width: 240px;
+}
+.chip span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.chip button {
+    padding: 0 6px;
+    background: none;
+    border-radius: 50%;
+    font-size: 14px;
+    color: #94a3b8;
+}
+.chip button:hover { background: #334155; color: #fff; }
+
+input[type="text"] {
+    flex: 1;
+    min-width: 0;
+    padding: 12px 16px;
+    border-radius: 24px;
+    border: 1px solid #334155;
+    background: #0f172a;
+    color: #fff;
+    outline: none;
+    font-size: 15px;
+}
+input[type="text"]:focus { border-color: #3b82f6; }
+button {
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 15px;
+}
+.send {
+    padding: 0 22px;
+    border-radius: 24px;
+    background: #2563eb;
+    font-weight: 600;
+}
+.send:hover { background: #1d4ed8; }
+.send:disabled { opacity: 0.5; cursor: default; }
+.icon-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: #0f172a;
+    border: 1px solid #334155;
+    font-size: 19px;
+    flex-shrink: 0;
+}
+.icon-btn:hover, .icon-btn.active { background: #334155; }
+
+/* ---------- прочее ---------- */
+.drop-hint {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(37, 99, 235, 0.25);
+    border: 3px dashed #3b82f6;
+    z-index: 50;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    pointer-events: none;
+}
+.drop-hint.show { display: flex; }
+
+#toast {
+    position: fixed;
+    left: 50%;
+    bottom: 90px;
+    transform: translateX(-50%);
+    background: #0b1220;
+    border: 1px solid #334155;
+    padding: 10px 16px;
+    border-radius: 12px;
+    font-size: 14px;
+    max-width: 90%;
+    display: none;
+    z-index: 60;
+}
+#toast.error { border-color: #ef4444; }
+#toast.show { display: block; }
+
+dialog {
+    background: #1e293b;
+    color: #e5e7eb;
+    border: 1px solid #334155;
+    border-radius: 14px;
+    padding: 20px;
+    width: 320px;
+}
+dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+dialog h3 { margin: 0 0 14px; font-size: 16px; }
+dialog select, dialog input[type="text"] {
+    width: 100%;
+    margin-bottom: 10px;
+    border-radius: 10px;
+    padding: 10px 12px;
+    border: 1px solid #334155;
+    background: #0f172a;
+    color: #fff;
+    font-size: 14px;
+}
+.dialog-buttons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+.dialog-buttons button {
+    padding: 8px 16px;
+    border-radius: 10px;
+    background: #334155;
+}
+.dialog-buttons .primary { background: #2563eb; }
+</style>
+</head>
+<body data-user-id="{{ user['id'] }}">
+
+<div class="header">
+    <a class="back" href="/">←</a>
+    <div class="avatar">{{ user['name'][:1]|upper }}<img src="/avatar/{{ user['id'] }}" alt="" onerror="this.remove()"></div>
+    <div>
+        <div class="title">{{ user['name'] }}</div>
+        <div class="subtitle">{% if user['username'] %}@{{ user['username'] }}{% else %}ID {{ user['id'] }}{% endif %}</div>
+    </div>
+</div>
+
+<div class="scroll" id="scroll">
+    <div id="messages">
+        {% for message in messages %}
+        {% set mt = message['media_type'] %}
+        {% set mf = message['media_file'] %}
+        <div class="message {{ 'user' if message['sender'] == 'user' else 'admin' }}{{ ' has-media' if mt else '' }}" data-id="{{ message['id'] }}">
+
+            {% if mt in ('photo', 'animation', 'sticker') and mf %}
+                <button type="button" class="save-btn" data-file="{{ mf }}" title="Сохранить в стикеры">💾</button>
+            {% endif %}
+
+            {% if mt and not mf and mt != 'sticker_tgs' %}
+                <div class="missing">⚠️ Файл не загружен (лимит Telegram для ботов — 20 МБ)</div>
+
+            {% elif mt == 'photo' %}
+                <a href="/media/{{ mf }}" target="_blank"><img class="media" loading="lazy" src="/media/{{ mf }}" alt=""></a>
+
+            {% elif mt == 'animation' %}
+                {% if mf.endswith('.gif') %}
+                    <img class="media" loading="lazy" src="/media/{{ mf }}" alt="">
+                {% else %}
+                    <video class="media" src="/media/{{ mf }}" autoplay loop muted playsinline controls></video>
+                {% endif %}
+
+            {% elif mt == 'video' %}
+                <video class="media" src="/media/{{ mf }}" controls preload="metadata" playsinline></video>
+
+            {% elif mt == 'video_note' %}
+                <video class="media round" src="/media/{{ mf }}" controls preload="metadata" playsinline></video>
+
+            {% elif mt == 'voice' or mt == 'audio' %}
+                {% if mt == 'audio' and message['media_name'] %}<div class="text">🎵 {{ message['media_name'] }}</div>{% endif %}
+                <audio class="media" src="/media/{{ mf }}" controls preload="metadata"></audio>
+
+            {% elif mt == 'sticker' %}
+                {% if mf.endswith('.webm') %}
+                    <video class="media sticker" src="/media/{{ mf }}" autoplay loop muted playsinline></video>
+                {% else %}
+                    <img class="media sticker" loading="lazy" src="/media/{{ mf }}" alt="">
+                {% endif %}
+
+            {% elif mt == 'sticker_tgs' %}
+                <div class="emoji-sticker">{{ message['media_name'] or '💟' }}<small>анимированный стикер</small></div>
+
+            {% elif mt == 'document' %}
+                <a class="file" href="/media/{{ mf }}" download="{{ message['media_name'] or mf }}">📎 {{ message['media_name'] or 'Файл' }}</a>
+            {% endif %}
+
+            {% if message['text'] %}<div class="text">{{ message['text'] }}</div>{% endif %}
+            <div class="time" data-utc="{{ message['created_at'] }}"></div>
+        </div>
+        {% else %}
+        <div class="empty">Сообщений пока нет</div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Панель стикеров -->
+<div class="picker" id="picker">
+    <div class="picker-grid" id="pickerGrid"></div>
+    <div class="picker-tabs" id="pickerTabs"></div>
+</div>
+
+<!-- Форма отправки -->
+<div class="form-wrap">
+    <div class="attachments" id="attachments"></div>
+    <form class="form-inner" id="sendForm">
+        <button type="button" class="icon-btn" id="attachBtn" title="Прикрепить файл">📎</button>
+        <button type="button" class="icon-btn" id="stickerBtn" title="Стикеры и GIF">😊</button>
+        <input type="file" id="fileInput" multiple hidden>
+        <input type="text" id="messageInput" placeholder="Введите сообщение..." autocomplete="off" autofocus>
+        <button type="submit" class="send" id="sendBtn">Отправить</button>
+    </form>
+</div>
+
+<!-- Сохранение в стикерпак -->
+<dialog id="saveDialog">
+    <h3>Сохранить в стикеры</h3>
+    <select id="savePack"></select>
+    <input type="text" id="saveNewPack" placeholder="Название нового пака" maxlength="40" hidden>
+    <div class="dialog-buttons">
+        <button type="button" id="saveCancel">Отмена</button>
+        <button type="button" class="primary" id="saveConfirm">Сохранить</button>
+    </div>
+</dialog>
+
+<div class="drop-hint" id="dropHint">Отпусти файлы, чтобы прикрепить</div>
+<div id="toast"></div>
+
+<script>
+const USER_ID = Number(document.body.dataset.userId);
+
+const scrollBox = document.getElementById("scroll");
+const list = document.getElementById("messages");
+const form = document.getElementById("sendForm");
+const input = document.getElementById("messageInput");
+const sendBtn = document.getElementById("sendBtn");
+const fileInput = document.getElementById("fileInput");
+const attachmentsBox = document.getElementById("attachments");
+const picker = document.getElementById("picker");
+const pickerGrid = document.getElementById("pickerGrid");
+const pickerTabs = document.getElementById("pickerTabs");
+const stickerBtn = document.getElementById("stickerBtn");
+
+let pinned = true;      // прижаты ли мы к низу ленты
+let pending = [];       // файлы, выбранные для отправки
+let packs = null;       // кэш стикерпаков
+let activePack = null;
+
+/* ---------- вспомогательное ---------- */
+
+function toast(text, isError) {
+    const el = document.getElementById("toast");
+    el.textContent = text;
+    el.className = "show" + (isError ? " error" : "");
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => { el.className = ""; }, 3500);
+}
+
+function formatTimes() {
+    document.querySelectorAll(".time[data-utc]").forEach(el => {
+        if (el.textContent) return;
+        const d = new Date(el.dataset.utc.replace(" ", "T") + "Z");
+        if (!isNaN(d)) {
+            el.textContent = d.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
+        }
+    });
+}
+
+function toBottom() {
+    scrollBox.scrollTop = scrollBox.scrollHeight;
+}
+
+function lastId() {
+    const items = list.querySelectorAll(".message");
+    return items.length ? Number(items[items.length - 1].dataset.id) : 0;
+}
+
+function stickerUrl(pack, file) {
+    return "/sticker-file/" + encodeURIComponent(pack) + "/" + encodeURIComponent(file);
+}
+
+scrollBox.addEventListener("scroll", () => {
+    pinned = scrollBox.scrollHeight - scrollBox.scrollTop - scrollBox.clientHeight < 120;
+});
+
+// Картинки и видео догружаются позже и меняют высоту ленты
+list.addEventListener("load", () => { if (pinned) toBottom(); }, true);
+list.addEventListener("loadedmetadata", () => { if (pinned) toBottom(); }, true);
+window.addEventListener("load", toBottom);
+
+/* ---------- автообновление ---------- */
+
+// Подгружаем только новые сообщения, поэтому видео и GIF не перезапускаются
+async function poll() {
+    try {
+        const response = await fetch(location.href);
+        const html = await response.text();
+        const doc = new DOMParser().parseFromString(html, "text/html");
+
+        const known = lastId();
+        let added = false;
+
+        doc.querySelectorAll("#messages .message").forEach(el => {
+            if (Number(el.dataset.id) > known) {
+                list.appendChild(document.importNode(el, true));
+                added = true;
+            }
+        });
+
+        if (added) {
+            const empty = list.querySelector(".empty");
+            if (empty) empty.remove();
+            formatTimes();
+            if (pinned) toBottom();
+        }
+    } catch (e) {}
+}
+
+setInterval(poll, 3000);
+
+/* ---------- вложения ---------- */
+
+function renderAttachments() {
+    attachmentsBox.innerHTML = "";
+    pending.forEach((file, index) => {
+        const chip = document.createElement("div");
+        chip.className = "chip";
+
+        const name = document.createElement("span");
+        name.textContent = "📎 " + file.name;
+
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = "✕";
+        remove.onclick = () => { pending.splice(index, 1); renderAttachments(); };
+
+        chip.append(name, remove);
+        attachmentsBox.appendChild(chip);
+    });
+}
+
+function addFiles(files) {
+    for (const file of files) pending.push(file);
+    renderAttachments();
+    input.focus();
+}
+
+document.getElementById("attachBtn").onclick = () => fileInput.click();
+fileInput.onchange = () => { addFiles(fileInput.files); fileInput.value = ""; };
+
+// Вставка картинок из буфера обмена (Ctrl+V)
+document.addEventListener("paste", e => {
+    if (e.clipboardData && e.clipboardData.files.length) {
+        e.preventDefault();
+        addFiles(e.clipboardData.files);
+    }
+});
+
+// Перетаскивание файлов на страницу
+const dropHint = document.getElementById("dropHint");
+let dragDepth = 0;
+window.addEventListener("dragenter", e => {
+    if (e.dataTransfer && e.dataTransfer.types.includes("Files")) {
+        dragDepth++;
+        dropHint.classList.add("show");
+    }
+});
+window.addEventListener("dragleave", () => {
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (!dragDepth) dropHint.classList.remove("show");
+});
+window.addEventListener("dragover", e => e.preventDefault());
+window.addEventListener("drop", e => {
+    e.preventDefault();
+    dragDepth = 0;
+    dropHint.classList.remove("show");
+    if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+});
+
+/* ---------- отправка ---------- */
+
+form.addEventListener("submit", async e => {
+    e.preventDefault();
+
+    const text = input.value.trim();
+    if (!text && !pending.length) return;
+
+    const data = new FormData();
+    data.append("message", text);
+    pending.forEach(file => data.append("files", file));
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = pending.length ? "Загрузка…" : "…";
+
+    try {
+        const response = await fetch(`/chat/${USER_ID}/send`, {method: "POST", body: data});
+        const result = await response.json();
+
+        if (result.ok) {
+            input.value = "";
+        } else {
+            toast(result.error || "Не удалось отправить", true);
+        }
+        pending = [];
+        renderAttachments();
+        pinned = true;
+        await poll();
+    } catch (err) {
+        toast("Ошибка соединения с панелью", true);
+    } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = "Отправить";
+        input.focus();
+    }
+});
+
+/* ---------- панель стикеров ---------- */
+
+async function loadPacks() {
+    const response = await fetch("/api/stickers");
+    packs = (await response.json()).packs;
+    if (!packs.some(p => p.name === activePack)) {
+        activePack = packs.length ? packs[0].name : null;
+    }
+}
+
+function makeThumb(pack, item) {
+    const cell = document.createElement("div");
+    cell.className = "picker-item";
+    cell.title = item.file;
+
+    let media;
+    if (item.video) {
+        media = document.createElement("video");
+        media.muted = true;
+        media.loop = true;
+        media.playsInline = true;
+        media.preload = "metadata";
+        cell.onmouseenter = () => media.play();
+        cell.onmouseleave = () => { media.pause(); media.currentTime = 0; };
+    } else {
+        media = document.createElement("img");
+        media.loading = "lazy";
+    }
+    media.src = stickerUrl(pack.name, item.file);
+    cell.appendChild(media);
+
+    cell.onclick = () => sendSticker(pack.name, item.file);
+    return cell;
+}
+
+function renderPicker() {
+    pickerGrid.innerHTML = "";
+    pickerTabs.innerHTML = "";
+
+    if (!packs || !packs.length) {
+        const empty = document.createElement("div");
+        empty.className = "picker-empty";
+        empty.textContent = "Стикеров пока нет. Наведи курсор на фото, GIF или стикер в чате и нажми 💾, либо загрузи файлы в разделе «Управление».";
+        pickerGrid.appendChild(empty);
+    } else {
+        const pack = packs.find(p => p.name === activePack) || packs[0];
+
+        if (!pack.items.length) {
+            const empty = document.createElement("div");
+            empty.className = "picker-empty";
+            empty.textContent = "В этом паке пусто.";
+            pickerGrid.appendChild(empty);
+        }
+        pack.items.forEach(item => pickerGrid.appendChild(makeThumb(pack, item)));
+
+        packs.forEach(p => {
+            const tab = document.createElement("button");
+            tab.type = "button";
+            tab.className = "tab" + (p.name === pack.name ? " active" : "");
+            tab.textContent = p.name;
+            tab.onclick = () => { activePack = p.name; renderPicker(); };
+            pickerTabs.appendChild(tab);
+        });
+    }
+
+    const manage = document.createElement("a");
+    manage.className = "tab-manage";
+    manage.href = "/stickers";
+    manage.target = "_blank";
+    manage.textContent = "⚙ Управление";
+    pickerTabs.appendChild(manage);
+}
+
+stickerBtn.onclick = async () => {
+    const open = picker.classList.toggle("open");
+    stickerBtn.classList.toggle("active", open);
+
+    if (open) {
+        await loadPacks();
+        renderPicker();
+    }
+    if (pinned) toBottom();
+};
+
+async function sendSticker(pack, file) {
+    try {
+        const response = await fetch(`/chat/${USER_ID}/sticker`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({pack, file}),
+        });
+        const result = await response.json();
+
+        if (!result.ok) toast(result.error || "Не удалось отправить", true);
+
+        pinned = true;
+        await poll();
+    } catch (err) {
+        toast("Ошибка соединения с панелью", true);
+    }
+}
+
+/* ---------- сохранение медиа из чата в стикерпак ---------- */
+
+const saveDialog = document.getElementById("saveDialog");
+const savePack = document.getElementById("savePack");
+const saveNewPack = document.getElementById("saveNewPack");
+let saveFile = null;
+
+function syncNewPackField() {
+    saveNewPack.hidden = savePack.value !== "__new__";
+    if (!saveNewPack.hidden) saveNewPack.focus();
+}
+savePack.onchange = syncNewPackField;
+
+list.addEventListener("click", async e => {
+    const btn = e.target.closest(".save-btn");
+    if (!btn) return;
+
+    saveFile = btn.dataset.file;
+    await loadPacks();
+
+    savePack.innerHTML = "";
+    packs.forEach(p => {
+        const option = document.createElement("option");
+        option.value = p.name;
+        option.textContent = p.name;
+        savePack.appendChild(option);
+    });
+
+    const newOption = document.createElement("option");
+    newOption.value = "__new__";
+    newOption.textContent = "＋ Новый пак…";
+    savePack.appendChild(newOption);
+
+    const last = localStorage.getItem("lastPack");
+    savePack.value = packs.some(p => p.name === last) ? last : (packs.length ? packs[0].name : "__new__");
+    saveNewPack.value = "";
+    syncNewPackField();
+
+    saveDialog.showModal();
+});
+
+document.getElementById("saveCancel").onclick = () => saveDialog.close();
+
+document.getElementById("saveConfirm").onclick = async () => {
+    const pack = savePack.value === "__new__" ? saveNewPack.value.trim() : savePack.value;
+
+    if (!pack) {
+        toast("Введите название пака", true);
+        return;
+    }
+
+    const response = await fetch("/api/stickers/save", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({pack, media_file: saveFile}),
+    });
+    const result = await response.json();
+
+    if (result.ok) {
+        try { localStorage.setItem("lastPack", result.pack); } catch (e) {}
+        saveDialog.close();
+        toast("Сохранено в «" + result.pack + "»");
+        packs = null;
+        activePack = result.pack;
+        if (picker.classList.contains("open")) {
+            await loadPacks();
+            renderPicker();
+        }
+    } else {
+        toast(result.error || "Не удалось сохранить", true);
+    }
+};
+
+formatTimes();
+toBottom();
+</script>
+
+</body>
+</html>
